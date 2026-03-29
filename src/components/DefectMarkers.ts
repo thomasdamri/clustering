@@ -15,6 +15,18 @@ type DefectMarker = L.Marker & {
   _position?: string;
 };
 
+const _clusterCountCache = new WeakMap<L.MarkerCluster, number>();
+
+function totalDefectCount(clusterObj: L.MarkerCluster): number {
+  const cached = _clusterCountCache.get(clusterObj);
+  if (cached !== undefined) return cached;
+  const count = clusterObj.getAllChildMarkers().reduce((sum, m) => {
+    return sum + ((m as DefectMarker)._defects?.length ?? 0);
+  }, 0);
+  _clusterCountCache.set(clusterObj, count);
+  return count;
+}
+
 function buildPopoverHTML(defects: Defect[]): string {
   const rows = defects
     .map(
@@ -63,13 +75,14 @@ export function createDefectLayer(
   map: L.Map,
 ): L.MarkerClusterGroup {
   const cluster = L.markerClusterGroup({
-    maxClusterRadius: 30,
+    maxClusterRadius: 60,
     spiderfyOnMaxZoom: true,
     showCoverageOnHover: false,
     disableClusteringAtZoom: 4,
     zoomToBoundsOnClick: false,
+    animate: false,
     iconCreateFunction: (clusterObj) => {
-      const count = clusterObj.getChildCount();
+      const count = totalDefectCount(clusterObj);
 
       let size: 'small' | 'medium' | 'large' | 'xl';
       let px: number;
@@ -103,6 +116,7 @@ export function createDefectLayer(
   let activeElement: HTMLElement | null = null;
   let activePopup: L.Popup | null = null;
   let selectedElement: HTMLElement | null = null;
+  let activeTooltipCluster: L.MarkerCluster | null = null;
 
   function clearActive() {
     if (activeElement) {
@@ -129,6 +143,13 @@ export function createDefectLayer(
     activePopup = popup;
   }
 
+  function clearClusterTooltip() {
+    if (activeTooltipCluster) {
+      activeTooltipCluster.unbindTooltip();
+      activeTooltipCluster = null;
+    }
+  }
+
   function setSelected(el: HTMLElement) {
     clearSelected();
     clearActive();
@@ -137,18 +158,20 @@ export function createDefectLayer(
   }
 
   // --- Escape key handler ---
-  document.addEventListener('keydown', (e) => {
+  const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       clearActive();
       clearSelected();
     }
-  });
+  };
+  document.addEventListener('keydown', onKeyDown);
 
   // --- Cluster tooltip on hover ---
   cluster.on('clustermouseover', (e: L.LeafletEvent) => {
     const ce = e as ClusterEvent;
     const clusterLayer = ce.propagatedFrom ?? ce.layer;
-    const count = clusterLayer.getChildCount();
+    const count = totalDefectCount(clusterLayer);
+    activeTooltipCluster = clusterLayer;
     clusterLayer
       .bindTooltip(`${count} defect${count > 1 ? 's' : ''}`, {
         direction: 'top' as L.Direction,
@@ -161,10 +184,19 @@ export function createDefectLayer(
     const ce = e as ClusterEvent;
     const clusterLayer = ce.propagatedFrom ?? ce.layer;
     clusterLayer.unbindTooltip();
+    activeTooltipCluster = null;
+  });
+
+  map.on('movestart', clearClusterTooltip);
+
+  cluster.on('remove', () => {
+    document.removeEventListener('keydown', onKeyDown);
+    map.off('movestart', clearClusterTooltip);
   });
 
   // --- Cluster click handler ---
   cluster.on('clusterclick', (e: L.LeafletEvent) => {
+    clearClusterTooltip();
     const clusterLayer = (e as ClusterEvent).layer;
     const icon = clusterLayer.getElement?.();
     if (!icon) return;

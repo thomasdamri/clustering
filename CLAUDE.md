@@ -7,7 +7,7 @@ POC for a Leaflet-based tiled engineering diagram viewer with defect overlay mar
 ## Tech Stack
 
 - React 19, TypeScript 5.9, Vite 8
-- Leaflet JS (vanilla, not react-leaflet) + leaflet.markercluster
+- Leaflet JS (vanilla, not react-leaflet) + leaflet.markercluster + supercluster
 - MUI (Material UI) for UI components
 
 ## Key Data Files (in `/public`)
@@ -37,6 +37,9 @@ POC for a Leaflet-based tiled engineering diagram viewer with defect overlay mar
 ## Architecture
 
 - `src/components/MapViewer.tsx` — vanilla Leaflet map init via useRef/useEffect
-- `src/components/DefectMarkers.ts` — marker cluster layer (pure Leaflet, no JSX)
+- `src/components/CanvasClusterLayer.ts` — canvas-based cluster renderer (Supercluster + single `<canvas>`, default)
+- `src/components/DefectMarkers.ts` — DOM-based cluster renderer (leaflet.markercluster + L.divIcon)
 - `src/utils/generateDefects.ts` — random defect data generator
 - `src/types.ts` — shared TypeScript interfaces
+
+A **Canvas / Leaflet toggle chip** (top-right) switches between renderers at runtime. Canvas is the default. See `docs/performance-investigation.md` for the full performance context.

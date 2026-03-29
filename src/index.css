@@ -21,7 +21,7 @@ body,
   overflow: hidden;
 }
 
-/* Defect cluster marker styles — MD3 palette */
+/* ── Defect cluster marker styles (Leaflet DOM mode) — MD3 palette ── */
 .defect-cluster {
   border-radius: 50%;
   display: flex;
@@ -30,7 +30,12 @@ body,
   background: #E8DEF8;
   border: 1.5px solid rgba(103, 80, 164, 0.4);
   cursor: pointer;
-  transition: transform 120ms ease, background 120ms ease, border 120ms ease, box-shadow 120ms ease;
+  /* Only transition visual properties — NOT transform.
+     Leaflet repositions markers by writing transform: translate3d() on this
+     element every drag frame.  If transform is in the transition list the
+     browser runs a 120ms animation per marker per frame, causing severe
+     lag with many visible clusters. */
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
   /* Must be position:absolute so markers don't participate in normal document
      flow.  Leaflet positions icons purely via transform: translate3d() and
      assumes zero flow offset — if markers remain in-flow (static/relative),
@@ -44,6 +49,9 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Scale lives on the inner element so its transition is independent of
+     Leaflet's transform on the outer element. */
+  transition: transform 120ms ease;
 }
 
 .defect-cluster span {
@@ -64,9 +72,11 @@ body,
 
 /* Hover */
 .defect-cluster:hover {
-  transform: scale(1.08);
   border-color: rgba(103, 80, 164, 0.6);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.defect-cluster:hover > div {
+  transform: scale(1.08);
 }
 .defect-cluster:hover::after {
   background: rgba(103, 80, 164, 0.08);
