@@ -1,0 +1,184 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Leaflet assumes content-box sizing internally — the global border-box
+   reset above breaks its position/transform calculations for tiles,
+   markers, and panes.  Restore the default for everything inside the
+   map container. */
+.leaflet-container,
+.leaflet-container * {
+  box-sizing: content-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Defect cluster marker styles — MD3 palette */
+.defect-cluster {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #E8DEF8;
+  border: 1.5px solid rgba(103, 80, 164, 0.4);
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border 120ms ease, box-shadow 120ms ease;
+  /* Must be position:absolute so markers don't participate in normal document
+     flow.  Leaflet positions icons purely via transform: translate3d() and
+     assumes zero flow offset — if markers remain in-flow (static/relative),
+     each marker's height accumulates and pushes subsequent markers down. */
+  position: absolute;
+}
+
+.defect-cluster div {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.defect-cluster span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #21005D;
+  line-height: 1;
+}
+
+/* State layer pseudo-element */
+.defect-cluster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Hover */
+.defect-cluster:hover {
+  transform: scale(1.08);
+  border-color: rgba(103, 80, 164, 0.6);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.defect-cluster:hover::after {
+  background: rgba(103, 80, 164, 0.08);
+}
+
+/* Active (popover open) */
+.defect-cluster-active {
+  border: 2px solid #6750A4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.defect-cluster-active::after {
+  background: rgba(103, 80, 164, 0.12);
+}
+
+/* Selected */
+.defect-cluster-selected {
+  background: #6750A4;
+  border: 2px solid #6750A4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.defect-cluster-selected span {
+  color: #FFFFFF;
+  font-weight: 600;
+}
+.defect-cluster-selected:hover {
+  background: #7E67AE;
+  border-color: #7E67AE;
+}
+
+/* ── Defect tooltip ── */
+.defect-tooltip {
+  background: #1D1B20;
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.defect-tooltip::before {
+  display: none;
+}
+
+/* ── Defect popover (Leaflet popup override) ── */
+.leaflet-popup.defect-popover-popup .leaflet-popup-content-wrapper {
+  background: #FFFBFE;
+  border: 0.5px solid #CAC4D0;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.08);
+  padding: 0;
+}
+.leaflet-popup.defect-popover-popup .leaflet-popup-content {
+  margin: 0;
+  width: 220px !important;
+}
+.leaflet-popup.defect-popover-popup .leaflet-popup-tip {
+  background: #FFFBFE;
+  border: 0.5px solid #CAC4D0;
+}
+.leaflet-popup.defect-popover-popup .leaflet-popup-close-button {
+  display: none;
+}
+
+/* Popover header */
+.defect-popover-header {
+  padding: 10px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #49454F;
+}
+
+/* Popover body — max 5 rows visible */
+.defect-popover-body {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* Popover row */
+.defect-popover-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 80ms ease;
+}
+.defect-popover-row:hover {
+  background: rgba(103, 80, 164, 0.06);
+}
+.defect-popover-row-selected {
+  background: #EDE7F6;
+}
+.defect-popover-row-selected:hover {
+  background: #EDE7F6;
+}
+
+/* Defect ID — monospace */
+.defect-popover-id {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1D1B20;
+}
+
+/* Defect description */
+.defect-popover-desc {
+  font-size: 12px;
+  color: #49454F;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
