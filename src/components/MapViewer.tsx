@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import L from 'leaflet';
-import type { TileMeta } from '../types';
+import { useEffect, useRef } from "react";
+import L from "leaflet";
+import type { TileMeta } from "../types";
 
 interface MapViewerProps {
   tileMeta: TileMeta;
@@ -27,18 +27,20 @@ export default function MapViewer({ tileMeta, onMapReady }: MapViewerProps) {
       maxBoundsViscosity: 1.0,
       zoomSnap: 0.25,
       zoomDelta: 0.5,
+      inertia: false,
     });
 
     map.fitBounds(bounds);
 
-    L.tileLayer('/tilles/{z}/{x}/{y}.webp', {
+    L.tileLayer("/tilles/{z}/{x}/{y}.webp", {
       tileSize: tileMeta.tile_size,
       noWrap: true,
       maxNativeZoom: tileMeta.max_zoom,
       minNativeZoom: 0,
       minZoom: -2,
       bounds,
-      attribution: '',
+      attribution: "",
+      updateWhenIdle: true,
     }).addTo(map);
 
     mapRef.current = map;
@@ -51,10 +53,5 @@ export default function MapViewer({ tileMeta, onMapReady }: MapViewerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height: '100%' }}
-    />
-  );
+  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }
