@@ -1,18 +1,19 @@
 import L from 'leaflet';
 import Supercluster from 'supercluster';
-import type { Hitbox, Defect } from '../types';
+import type { Hitbox, Defect, LayerCallbacks, ClusterLayerHandle } from '../types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface PointProps {
   defects: Defect[];
   position: string;
-  // Original Leaflet coordinates stored so no back-conversion needed for points
   lat: number;
   lng: number;
 }
 
-type ClusterFeature = Supercluster.ClusterFeature<PointProps> | Supercluster.PointFeature<PointProps>;
+type ClusterFeature =
+  | Supercluster.ClusterFeature<PointProps>
+  | Supercluster.PointFeature<PointProps>;
 
 interface RenderedItem {
   x: number;
@@ -25,38 +26,6 @@ interface RenderedItem {
 type MarkerState = 'default' | 'hover' | 'active' | 'selected';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function buildPopoverHTML(defects: Defect[]): string {
-  const rows = defects
-    .map(
-      (d) =>
-        `<div class="defect-popover-row" data-defect-id="${d.defectId}">
-          <span class="defect-popover-id">${d.defectId}</span>
-          <span class="defect-popover-desc">${d.description}</span>
-        </div>`,
-    )
-    .join('');
-  return `<div class="defect-popover">
-    <div class="defect-popover-header">${defects.length} DEFECT${defects.length > 1 ? 'S' : ''}</div>
-    <div class="defect-popover-body">${rows}</div>
-  </div>`;
-}
-
-function attachRowClickHandlers(popup: L.Popup, onRowClick: () => void) {
-  requestAnimationFrame(() => {
-    const container = popup.getElement();
-    if (!container) return;
-    container.addEventListener('click', (e) => {
-      const row = (e.target as HTMLElement).closest('.defect-popover-row') as HTMLElement | null;
-      if (!row) return;
-      container
-        .querySelectorAll('.defect-popover-row-selected')
-        .forEach((el) => el.classList.remove('defect-popover-row-selected'));
-      row.classList.add('defect-popover-row-selected');
-      onRowClick();
-    });
-  });
-}
 
 function isCluster(f: ClusterFeature): f is Supercluster.ClusterFeature<PointProps> {
   return 'cluster_id' in f.properties;
@@ -80,7 +49,7 @@ function labelForCount(count: number): string {
 
 // ── CanvasClusterLayer ────────────────────────────────────────────────────────
 
-export class CanvasClusterLayer extends L.Layer {
+export class CanvasClusterLayer extends L.Layer implements ClusterLayerHandle {
   private _lmap: L.Map | null = null;
   private _canvas: HTMLCanvasElement | null = null;
   private _ctx: CanvasRenderingContext2D | null = null;
@@ -91,10 +60,8 @@ export class CanvasClusterLayer extends L.Layer {
   private _hovered: RenderedItem | null = null;
   private _active: RenderedItem | null = null;
   private _selected: RenderedItem | null = null;
-  private _activePopup: L.Popup | null = null;
-  private _tooltip: L.Tooltip = L.tooltip({ direction: 'top', className: 'defect-tooltip' });
+  private _callbacks?: LayerCallbacks;
 
-  // Leaflet bounds for coordinate conversion
   private _latMin: number;
   private _latMax: number;
   private _lngMax: number;
@@ -103,15 +70,15 @@ export class CanvasClusterLayer extends L.Layer {
     hitboxes: Hitbox[],
     defectsByPos: Map<string, Defect[]>,
     bounds: [[number, number], [number, number]],
+    callbacks?: LayerCallbacks,
   ) {
     super();
+    this._callbacks = callbacks;
 
-    this._latMin = bounds[0][0]; // -256
-    this._latMax = bounds[1][0]; // 0
-    this._lngMax = bounds[1][1]; // 1819.0431
+    this._latMin = bounds[0][0];
+    this._latMax = bounds[1][0];
+    this._lngMax = bounds[1][1];
 
-    // Build spatial index. maxZoom:3 matches map max_zoom so at zoom 3
-    // all points are individual (equivalent to disableClusteringAtZoom:4).
     this._sc = new Supercluster<PointProps>({ radius: 60, maxZoom: 3 });
 
     const hitboxMap = new Map<string, Hitbox>();
@@ -206,15 +173,28 @@ export class CanvasClusterLayer extends L.Layer {
 
     document.removeEventListener('keydown', this._onKeyDown);
 
-    this._tooltip.remove();
-    if (this._activePopup) {
-      _lmap.closePopup(this._activePopup);
-      this._activePopup = null;
-    }
-
     this._lmap = null;
     this._ctx = null;
     return this;
+  }
+
+  // ── Public handle methods ──────────────────────────────────────────────────
+
+  clearActive(): void {
+    this._active = null;
+    this._scheduleRedraw();
+  }
+
+  clearSelected(): void {
+    this._selected = null;
+    this._scheduleRedraw();
+  }
+
+  selectActive(): void {
+    if (!this._active) return;
+    this._selected = this._active;
+    this._active = null;
+    this._scheduleRedraw();
   }
 
   // ── Canvas sizing ──────────────────────────────────────────────────────────
@@ -227,7 +207,6 @@ export class CanvasClusterLayer extends L.Layer {
     this._canvas.height = size.y * dpr;
     this._canvas.style.width = size.x + 'px';
     this._canvas.style.height = size.y + 'px';
-    // Re-fetch context and scale after resize
     const ctx = this._canvas.getContext('2d');
     if (ctx) {
       ctx.scale(dpr, dpr);
@@ -340,13 +319,11 @@ export class CanvasClusterLayer extends L.Layer {
         break;
     }
 
-    // Fill
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = fillColor;
     ctx.fill();
 
-    // Overlay (hover/active state layer)
     if (overlayColor) {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -354,14 +331,12 @@ export class CanvasClusterLayer extends L.Layer {
       ctx.fill();
     }
 
-    // Stroke
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = strokeWidth;
     ctx.stroke();
 
-    // Label
     ctx.font = '500 14px system-ui, sans-serif';
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
@@ -383,53 +358,30 @@ export class CanvasClusterLayer extends L.Layer {
     return null;
   }
 
-  // ── Tooltip ────────────────────────────────────────────────────────────────
-
-  private _showTooltip(item: RenderedItem): void {
-    if (!this._lmap) return;
-    const count = item.count;
-    const latlng = this._featureLatLng(item.feature);
-    this._tooltip
-      .setLatLng(latlng)
-      .setContent(`${count} defect${count !== 1 ? 's' : ''}`)
-      .addTo(this._lmap);
-  }
-
-  private _hideTooltip(): void {
-    this._tooltip.remove();
-  }
-
-  // ── State management ───────────────────────────────────────────────────────
-
-  private _clearActive(): void {
-    if (this._activePopup && this._lmap) {
-      this._lmap.closePopup(this._activePopup);
-      this._activePopup = null;
-    }
-    this._active = null;
-  }
-
-  private _clearSelected(): void {
-    this._selected = null;
-  }
-
   // ── Event handlers ─────────────────────────────────────────────────────────
 
   private _onMouseMove = (e: MouseEvent): void => {
     const hit = this._hitTest(e.clientX, e.clientY);
-    if (hit === this._hovered) return;
+    const changed = hit !== this._hovered;
     this._hovered = hit;
+
     if (this._canvas) this._canvas.style.cursor = hit ? 'pointer' : '';
-    this._hideTooltip();
-    if (hit) this._showTooltip(hit);
-    this._scheduleRedraw();
+
+    if (hit) {
+      // Always update position so tooltip follows cursor within cluster
+      this._callbacks?.onHover({ x: e.clientX, y: e.clientY, count: hit.count });
+    } else if (changed) {
+      this._callbacks?.onHoverEnd();
+    }
+
+    if (changed) this._scheduleRedraw();
   };
 
   private _onMouseLeave = (): void => {
     if (!this._hovered) return;
     this._hovered = null;
     if (this._canvas) this._canvas.style.cursor = '';
-    this._hideTooltip();
+    this._callbacks?.onHoverEnd();
     this._scheduleRedraw();
   };
 
@@ -438,78 +390,53 @@ export class CanvasClusterLayer extends L.Layer {
     const hit = this._hitTest(e.clientX, e.clientY);
     if (!hit) return;
 
-    this._hideTooltip();
+    this._callbacks?.onHoverEnd();
 
     const map = this._lmap;
     const feature = hit.feature;
     const featureIsCluster = isCluster(feature);
 
-    // Zoom-to-fit for deeply clustered markers
     const zoom = map.getZoom();
     const disableClusteringAtZoom = 4;
     if (featureIsCluster && zoom < disableClusteringAtZoom - 1) {
-      const expansionZoom = this._sc.getClusterExpansionZoom(feature.properties.cluster_id);
+      const expansionZoom = this._sc.getClusterExpansionZoom(
+        feature.properties.cluster_id,
+      );
       const latlng = this._featureLatLng(feature);
       map.flyTo(latlng, expansionZoom, { duration: 0.3 });
       return;
     }
 
-    // Gather defects
     let allDefects: Defect[];
     if (featureIsCluster) {
-      const leaves = this._sc.getLeaves(feature.properties.cluster_id, Infinity) as Supercluster.PointFeature<PointProps>[];
+      const leaves = this._sc.getLeaves(
+        feature.properties.cluster_id,
+        Infinity,
+      ) as Supercluster.PointFeature<PointProps>[];
       allDefects = leaves.flatMap((l) => l.properties.defects);
     } else {
       allDefects = feature.properties.defects;
     }
 
-    // Single defect — just select
     if (allDefects.length <= 1) {
-      this._clearActive();
+      this._active = null;
       this._selected = hit;
       this._scheduleRedraw();
       return;
     }
 
-    // Open popover
-    this._clearSelected();
-    const latlng = this._featureLatLng(feature);
-    const popup = L.popup({
-      className: 'defect-popover-popup',
-      closeButton: false,
-      autoClose: true,
-      closeOnClick: true,
-      maxWidth: 220,
-      minWidth: 220,
-    })
-      .setLatLng(latlng)
-      .setContent(buildPopoverHTML(allDefects));
-
-    popup.on('remove', () => {
-      if (this._active && this._active.feature === feature) {
-        this._active = null;
-        this._activePopup = null;
-        this._scheduleRedraw();
-      }
-    });
-
-    popup.openOn(map);
-    this._clearActive();
+    this._selected = null;
     this._active = hit;
-    this._activePopup = popup;
     this._scheduleRedraw();
-
-    attachRowClickHandlers(popup, () => {
-      this._clearActive();
-      this._selected = hit;
-      this._scheduleRedraw();
-    });
+    this._callbacks?.onClusterClick({ x: e.clientX, y: e.clientY, defects: allDefects });
   };
 
   private _onKeyDown = (e: KeyboardEvent): void => {
     if (e.key !== 'Escape') return;
-    this._clearActive();
-    this._clearSelected();
+    const hadActiveOrSelected = !!(this._active || this._selected);
+    this._active = null;
+    this._selected = null;
     this._scheduleRedraw();
+    if (hadActiveOrSelected) this._callbacks?.onDismiss();
   };
 }
