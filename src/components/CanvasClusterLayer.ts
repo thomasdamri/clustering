@@ -390,6 +390,7 @@ export class CanvasClusterLayer extends L.Layer implements ClusterLayerHandle {
     const hit = this._hitTest(e.clientX, e.clientY);
     if (!hit) return;
 
+    this._hovered = null;
     this._callbacks?.onHoverEnd();
 
     const map = this._lmap;
