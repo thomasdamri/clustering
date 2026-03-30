@@ -405,6 +405,7 @@ export class CanvasClusterLayer extends L.Layer implements ClusterLayerHandle {
       );
       const latlng = this._featureLatLng(feature);
       map.flyTo(latlng, expansionZoom, { duration: 0.3 });
+      this._scheduleRedraw();
       return;
     }
 
