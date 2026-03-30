@@ -1,4 +1,4 @@
-import type { Hitbox, Defect } from '../types';
+import type { Hitbox, Defect, Severity } from '../types';
 
 const DEFECT_DESCRIPTIONS = [
   'Corrosion detected on surface',
@@ -14,6 +14,12 @@ const DEFECT_DESCRIPTIONS = [
   'Erosion wear pattern',
   'Insulation breakdown',
 ];
+
+const SEVERITIES: Severity[] = ['High', 'High', 'High', 'High', 'Med', 'Med', 'Med', 'Low', 'Low'];
+
+function randomSeverity(): Severity {
+  return SEVERITIES[Math.floor(Math.random() * SEVERITIES.length)];
+}
 
 function weightedDefectCount(): number {
   const r = Math.random();
@@ -38,9 +44,8 @@ export function generateDefects(hitboxes: Hitbox[]): Defect[] {
         defectId: `DEF-${String(id++).padStart(5, '0')}`,
         fittingPos: hitbox.label,
         description:
-          DEFECT_DESCRIPTIONS[
-            Math.floor(Math.random() * DEFECT_DESCRIPTIONS.length)
-          ],
+          DEFECT_DESCRIPTIONS[Math.floor(Math.random() * DEFECT_DESCRIPTIONS.length)],
+        severity: randomSeverity(),
       });
     }
   }
