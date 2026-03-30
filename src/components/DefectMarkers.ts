@@ -1,10 +1,7 @@
 import L from 'leaflet';
 import 'leaflet.markercluster';
-import type { Hitbox, Defect } from '../types';
+import type { Hitbox, Defect, LayerCallbacks, ClusterLayerHandle } from '../types';
 
-// leaflet.markercluster event types are incomplete — cluster events expose
-// .layer/.propagatedFrom with methods like getChildCount(), getAllChildMarkers(),
-// getElement(), getBounds(), getLatLng() that aren't in the type definitions.
 type ClusterEvent = L.LeafletEvent & {
   layer: L.MarkerCluster;
   propagatedFrom: L.MarkerCluster;
@@ -27,53 +24,12 @@ function totalDefectCount(clusterObj: L.MarkerCluster): number {
   return count;
 }
 
-function buildPopoverHTML(defects: Defect[]): string {
-  const rows = defects
-    .map(
-      (d) =>
-        `<div class="defect-popover-row" data-defect-id="${d.defectId}">
-          <span class="defect-popover-id">${d.defectId}</span>
-          <span class="defect-popover-desc">${d.description}</span>
-        </div>`,
-    )
-    .join('');
-
-  return `<div class="defect-popover">
-    <div class="defect-popover-header">${defects.length} DEFECT${defects.length > 1 ? 'S' : ''}</div>
-    <div class="defect-popover-body">${rows}</div>
-  </div>`;
-}
-
-function attachRowClickHandlers(
-  popup: L.Popup,
-  clusterEl: HTMLElement,
-  setSelected: (el: HTMLElement) => void,
-) {
-  requestAnimationFrame(() => {
-    const container = popup.getElement();
-    if (!container) return;
-
-    container.addEventListener('click', (e) => {
-      const row = (e.target as HTMLElement).closest(
-        '.defect-popover-row',
-      ) as HTMLElement | null;
-      if (!row) return;
-
-      container
-        .querySelectorAll('.defect-popover-row-selected')
-        .forEach((el) => el.classList.remove('defect-popover-row-selected'));
-
-      row.classList.add('defect-popover-row-selected');
-      setSelected(clusterEl);
-    });
-  });
-}
-
 export function createDefectLayer(
   hitboxes: Hitbox[],
   defectsByPos: Map<string, Defect[]>,
   map: L.Map,
-): L.MarkerClusterGroup {
+  callbacks?: LayerCallbacks,
+): ClusterLayerHandle {
   const cluster = L.markerClusterGroup({
     maxClusterRadius: 60,
     spiderfyOnMaxZoom: true,
@@ -87,19 +43,10 @@ export function createDefectLayer(
       let size: 'small' | 'medium' | 'large' | 'xl';
       let px: number;
 
-      if (count >= 16) {
-        size = 'xl';
-        px = 52;
-      } else if (count >= 6) {
-        size = 'large';
-        px = 44;
-      } else if (count >= 2) {
-        size = 'medium';
-        px = 36;
-      } else {
-        size = 'small';
-        px = 28;
-      }
+      if (count >= 16) { size = 'xl'; px = 52; }
+      else if (count >= 6) { size = 'large'; px = 44; }
+      else if (count >= 2) { size = 'medium'; px = 36; }
+      else { size = 'small'; px = 28; }
 
       const label = count >= 16 ? '16+' : String(count);
 
@@ -114,18 +61,22 @@ export function createDefectLayer(
 
   // --- State management ---
   let activeElement: HTMLElement | null = null;
-  let activePopup: L.Popup | null = null;
   let selectedElement: HTMLElement | null = null;
-  let activeTooltipCluster: L.MarkerCluster | null = null;
+  // Tracks the active mousemove listener for cursor-following tooltip
+  let hoverMoveHandler: ((e: MouseEvent) => void) | null = null;
+
+  function clearHoverTracking() {
+    if (hoverMoveHandler) {
+      map.getContainer().removeEventListener('mousemove', hoverMoveHandler);
+      hoverMoveHandler = null;
+      callbacks?.onHoverEnd();
+    }
+  }
 
   function clearActive() {
     if (activeElement) {
       activeElement.classList.remove('defect-cluster-active');
       activeElement = null;
-    }
-    if (activePopup) {
-      map.closePopup(activePopup);
-      activePopup = null;
     }
   }
 
@@ -136,18 +87,10 @@ export function createDefectLayer(
     }
   }
 
-  function setActive(el: HTMLElement, popup: L.Popup) {
+  function setActive(el: HTMLElement) {
     clearActive();
     el.classList.add('defect-cluster-active');
     activeElement = el;
-    activePopup = popup;
-  }
-
-  function clearClusterTooltip() {
-    if (activeTooltipCluster) {
-      activeTooltipCluster.unbindTooltip();
-      activeTooltipCluster = null;
-    }
   }
 
   function setSelected(el: HTMLElement) {
@@ -157,46 +100,54 @@ export function createDefectLayer(
     selectedElement = el;
   }
 
+  function selectActive() {
+    if (activeElement) setSelected(activeElement);
+  }
+
   // --- Escape key handler ---
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      clearActive();
-      clearSelected();
+    if (e.key !== 'Escape') {
+      return;
     }
+    const hadActive = !!activeElement;
+    clearActive();
+    clearSelected();
+    clearHoverTracking();
+    if (hadActive) callbacks?.onDismiss();
   };
   document.addEventListener('keydown', onKeyDown);
 
-  // --- Cluster tooltip on hover ---
+  // --- Cluster hover: cursor-following tooltip ---
   cluster.on('clustermouseover', (e: L.LeafletEvent) => {
     const ce = e as ClusterEvent;
     const clusterLayer = ce.propagatedFrom ?? ce.layer;
     const count = totalDefectCount(clusterLayer);
-    activeTooltipCluster = clusterLayer;
-    clusterLayer
-      .bindTooltip(`${count} defect${count > 1 ? 's' : ''}`, {
-        direction: 'top' as L.Direction,
-        className: 'defect-tooltip',
-      })
-      .openTooltip();
+    const me = (e as unknown as { originalEvent: MouseEvent }).originalEvent;
+
+    callbacks?.onHover({ x: me.clientX, y: me.clientY, count });
+
+    // Track mouse position within cluster for cursor following
+    hoverMoveHandler = (moveEvent: MouseEvent) => {
+      callbacks?.onHover({ x: moveEvent.clientX, y: moveEvent.clientY, count });
+    };
+    map.getContainer().addEventListener('mousemove', hoverMoveHandler);
   });
 
-  cluster.on('clustermouseout', (e: L.LeafletEvent) => {
-    const ce = e as ClusterEvent;
-    const clusterLayer = ce.propagatedFrom ?? ce.layer;
-    clusterLayer.unbindTooltip();
-    activeTooltipCluster = null;
+  cluster.on('clustermouseout', () => {
+    clearHoverTracking();
   });
 
-  map.on('movestart', clearClusterTooltip);
+  map.on('movestart', clearHoverTracking);
 
   cluster.on('remove', () => {
     document.removeEventListener('keydown', onKeyDown);
-    map.off('movestart', clearClusterTooltip);
+    map.off('movestart', clearHoverTracking);
+    clearHoverTracking();
   });
 
   // --- Cluster click handler ---
   cluster.on('clusterclick', (e: L.LeafletEvent) => {
-    clearClusterTooltip();
+    clearHoverTracking();
     const clusterLayer = (e as ClusterEvent).layer;
     const icon = clusterLayer.getElement?.();
     if (!icon) return;
@@ -208,12 +159,10 @@ export function createDefectLayer(
       if (d) allDefects.push(...d);
     }
 
-    // Zoom-to-fit if zoomed out
-    const clusterBounds = clusterLayer.getBounds();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MarkerClusterGroupOptions type doesn't include disableClusteringAtZoom
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const disableZoom = (cluster.options as any).disableClusteringAtZoom ?? 4;
     if (map.getZoom() < disableZoom - 1) {
-      map.flyToBounds(clusterBounds.pad(0.3), { duration: 0.3 });
+      map.flyToBounds(clusterLayer.getBounds().pad(0.3), { duration: 0.3 });
       return;
     }
 
@@ -222,36 +171,14 @@ export function createDefectLayer(
       return;
     }
 
-    // Show popover
-    const popup = L.popup({
-      className: 'defect-popover-popup',
-      closeButton: false,
-      autoClose: true,
-      closeOnClick: true,
-      maxWidth: 220,
-      minWidth: 220,
-    })
-      .setLatLng(clusterLayer.getLatLng())
-      .setContent(buildPopoverHTML(allDefects));
-
-    popup.on('remove', () => {
-      if (activeElement === icon) {
-        activeElement?.classList.remove('defect-cluster-active');
-        activeElement = null;
-        activePopup = null;
-      }
-    });
-
-    popup.openOn(map);
-    setActive(icon, popup);
-    attachRowClickHandlers(popup, icon, setSelected);
+    const me = (e as unknown as { originalEvent: MouseEvent }).originalEvent;
+    setActive(icon);
+    callbacks?.onClusterClick({ x: me.clientX, y: me.clientY, defects: allDefects });
   });
 
   // --- Create individual markers ---
   const hitboxMap = new Map<string, Hitbox>();
-  for (const h of hitboxes) {
-    hitboxMap.set(h.label, h);
-  }
+  for (const h of hitboxes) hitboxMap.set(h.label, h);
 
   for (const [pos, defects] of defectsByPos) {
     const hitbox = hitboxMap.get(pos);
@@ -263,19 +190,10 @@ export function createDefectLayer(
     let size: 'small' | 'medium' | 'large' | 'xl';
     let px: number;
 
-    if (count >= 16) {
-      size = 'xl';
-      px = 52;
-    } else if (count >= 6) {
-      size = 'large';
-      px = 44;
-    } else if (count >= 2) {
-      size = 'medium';
-      px = 36;
-    } else {
-      size = 'small';
-      px = 28;
-    }
+    if (count >= 16) { size = 'xl'; px = 52; }
+    else if (count >= 6) { size = 'large'; px = 44; }
+    else if (count >= 2) { size = 'medium'; px = 36; }
+    else { size = 'small'; px = 28; }
 
     const marker = L.marker(L.latLng(lat, lng), {
       icon: L.divIcon({
@@ -286,19 +204,27 @@ export function createDefectLayer(
       }),
     });
 
-    // Store defects on marker for retrieval in cluster click
     (marker as DefectMarker)._defects = defects;
     (marker as DefectMarker)._position = pos;
 
-    // Tooltip
-    marker.bindTooltip(`${count} defect${count > 1 ? 's' : ''}`, {
-      direction: 'top',
-      offset: L.point(0, -px / 2),
-      className: 'defect-tooltip',
+    // Marker hover — cursor-following tooltip
+    marker.on('mouseover', (e) => {
+      const me = (e as L.LeafletMouseEvent).originalEvent;
+      callbacks?.onHover({ x: me.clientX, y: me.clientY, count });
+
+      hoverMoveHandler = (moveEvent: MouseEvent) => {
+        callbacks?.onHover({ x: moveEvent.clientX, y: moveEvent.clientY, count });
+      };
+      map.getContainer().addEventListener('mousemove', hoverMoveHandler);
     });
 
-    // Click handler
-    marker.on('click', () => {
+    marker.on('mouseout', () => {
+      clearHoverTracking();
+    });
+
+    // Marker click
+    marker.on('click', (e) => {
+      clearHoverTracking();
       const el = marker.getElement();
       if (!el) return;
 
@@ -307,33 +233,21 @@ export function createDefectLayer(
         return;
       }
 
-      const popup = L.popup({
-        className: 'defect-popover-popup',
-        closeButton: false,
-        autoClose: true,
-        closeOnClick: true,
-        maxWidth: 220,
-        minWidth: 220,
-        offset: L.point(0, -px / 2 - 4),
-      })
-        .setLatLng(marker.getLatLng())
-        .setContent(buildPopoverHTML(defects));
-
-      popup.on('remove', () => {
-        if (activeElement === el) {
-          activeElement?.classList.remove('defect-cluster-active');
-          activeElement = null;
-          activePopup = null;
-        }
-      });
-
-      popup.openOn(map);
-      setActive(el, popup);
-      attachRowClickHandlers(popup, el, setSelected);
+      const me = (e as L.LeafletMouseEvent).originalEvent;
+      setActive(el);
+      callbacks?.onClusterClick({ x: me.clientX, y: me.clientY, defects });
     });
 
     cluster.addLayer(marker);
   }
 
-  return cluster;
+  const handle: ClusterLayerHandle = {
+    addTo: (m) => { cluster.addTo(m); },
+    remove: () => { cluster.remove(); },
+    clearActive,
+    clearSelected,
+    selectActive,
+  };
+
+  return handle;
 }
