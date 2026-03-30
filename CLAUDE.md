@@ -37,9 +37,10 @@ POC for a Leaflet-based tiled engineering diagram viewer with defect overlay mar
 ## Architecture
 
 - `src/components/MapViewer.tsx` — vanilla Leaflet map init via useRef/useEffect
-- `src/components/CanvasClusterLayer.ts` — canvas-based cluster renderer (Supercluster + single `<canvas>`, default)
-- `src/components/DefectMarkers.ts` — DOM-based cluster renderer (leaflet.markercluster + L.divIcon)
-- `src/utils/generateDefects.ts` — random defect data generator
+- `src/components/CanvasClusterLayer.ts` — canvas-based cluster renderer (Supercluster + single `<canvas>`, default), implements `ClusterLayerHandle`
+- `src/components/DefectMarkers.ts` — DOM-based cluster renderer (leaflet.markercluster + L.divIcon), returns `ClusterLayerHandle`
+- `src/components/ClusterOverlay.tsx` — MUI Popper (cursor-following tooltip) + Popover (defect list panel) rendered via virtual anchor elements
+- `src/utils/generateDefects.ts` — random defect data generator (includes severity: High/Med/Low)
 - `src/types.ts` — shared TypeScript interfaces
 
-A **Canvas / Leaflet toggle chip** (top-right) switches between renderers at runtime. Canvas is the default. See `docs/performance-investigation.md` for the full performance context.
+**Interaction pattern:** Both renderers fire `LayerCallbacks` (onHover, onHoverEnd, onClusterClick, onDismiss) into React state in `App.tsx`. `ClusterOverlay` renders MUI components positioned at screen coordinates via virtual anchor elements (objects with `getBoundingClientRect()`). A **Canvas / Leaflet toggle chip** (top-right) switches between renderers at runtime. Canvas is the default. See `docs/performance-investigation.md` for the full performance context.
