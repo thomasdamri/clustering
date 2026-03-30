@@ -19,6 +19,7 @@ interface ClusterOverlayProps {
 
 function makeVirtualAnchor(x: number, y: number) {
   return {
+    nodeType: 1 as Node['ELEMENT_NODE'],
     getBoundingClientRect: () =>
       DOMRect.fromRect({ x, y, width: 0, height: 0 }),
   };
