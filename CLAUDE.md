@@ -44,3 +44,24 @@ POC for a Leaflet-based tiled engineering diagram viewer with defect overlay mar
 - `src/types.ts` — shared TypeScript interfaces
 
 **Interaction pattern:** Both renderers fire `LayerCallbacks` (onHover, onHoverEnd, onClusterClick, onDismiss) into React state in `App.tsx`. `ClusterOverlay` renders MUI components positioned at screen coordinates via virtual anchor elements (objects with `getBoundingClientRect()`). A **Canvas / Leaflet toggle chip** (top-right) switches between renderers at runtime. Canvas is the default. See `docs/performance-investigation.md` for the full performance context.
+
+## Canvas Cluster Layer — Key Patterns
+
+### Zoom animation timing
+
+- The canvas sits outside Leaflet's CSS tile-pane transform — it does NOT scale with the map during zoom animation.
+- Use `zoomanim` (fires at animation START, `e.zoom`/`e.center` are the target values) to start cluster animations concurrently with the map zoom. `zoomend` fires after animation completes — too late.
+- Guard with a `_zoomAnimFired` flag: set in `zoomanim`, checked in `zoomend` to avoid double-animating. `zoomanim` does not fire for programmatic/non-animated zooms, so `zoomend` must handle that fallback.
+- Computing positions before the map has moved: use `map.project(latlng, targetZoom)` / `map.unproject(pt, targetZoom)` — NOT `latLngToContainerPoint`, which always uses the current zoom.
+
+### Supercluster parent/child matching
+
+- To determine which clusters merge/split during zoom, use `sc.getLeaves(clusterId, Infinity)` to get all leaf points under a cluster, then match by leaf position key (`p:{position}`). This reflects supercluster's actual R-tree grouping.
+- Do NOT use nearest-neighbour screen distance — spatially close ≠ same cluster membership.
+- `getLeaves` is fully recursive so it handles multi-level zoom jumps correctly. `getChildren` only gives direct children one zoom level up — avoid it for animation matching.
+- Supercluster `maxZoom` is set to 3 (`CanvasClusterLayer` constructor). At zoom ≥ 4 clustering is disabled.
+
+### Fractional zoom (zoomSnap: 0.25, zoomDelta: 0.5)
+
+- `zoomanim`/`zoomend` fire on every 0.25-step snap. Always `Math.round(map.getZoom())` before passing to `sc.getClusters()` — supercluster only accepts integer zoom levels.
+- Many consecutive zoom events may not change the cluster layout at all (multiple fractional steps round to the same integer).

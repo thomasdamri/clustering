@@ -13,6 +13,11 @@
   box-sizing: content-box;
 }
 
+/* Slow Leaflet's built-in zoom animation — canvas POSITION_DURATION must match */
+.leaflet-zoom-anim .leaflet-zoom-animated {
+  transition: transform 0.4s cubic-bezier(0, 0, 0.25, 1) !important;
+}
+
 html,
 body,
 #root {
