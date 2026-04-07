@@ -11,7 +11,7 @@ import { createDefectLayer } from './components/DefectMarkers';
 import { generateDefects, groupDefectsByPos } from './utils/generateDefects';
 import type {
   TileMeta,
-  LabelManifest,
+  Hitbox,
   HoveredCluster,
   ActiveCluster,
   LayerCallbacks,
@@ -22,7 +22,7 @@ type RendererMode = 'canvas' | 'leaflet';
 
 export default function App() {
   const [tileMeta, setTileMeta] = useState<TileMeta | null>(null);
-  const [manifest, setManifest] = useState<LabelManifest | null>(null);
+  const [hitboxes, setHitboxes] = useState<Hitbox[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<RendererMode>('canvas');
@@ -38,11 +38,11 @@ export default function App() {
   useEffect(() => {
     Promise.all([
       fetch('/tile_meta.json').then((r) => r.json()),
-      fetch('/label-manifest.json').then((r) => r.json()),
+      fetch('/hitboxes.json').then((r) => r.json()),
     ])
-      .then(([meta, man]) => {
+      .then(([meta, hb]) => {
         setTileMeta(meta as TileMeta);
-        setManifest(man as LabelManifest);
+        setHitboxes(hb as Hitbox[]);
         setLoading(false);
       })
       .catch((err) => {
@@ -52,9 +52,9 @@ export default function App() {
   }, []);
 
   const defects = useMemo(() => {
-    if (!manifest) return [];
-    return generateDefects(manifest.hitboxes);
-  }, [manifest]);
+    if (!hitboxes) return [];
+    return generateDefects(hitboxes);
+  }, [hitboxes]);
 
   const defectsByPos = useMemo(() => groupDefectsByPos(defects), [defects]);
 
@@ -96,7 +96,7 @@ export default function App() {
   // Create/destroy cluster layer when mode or data changes
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReady || !map || !manifest || !tileMeta) return;
+    if (!mapReady || !map || !hitboxes || !tileMeta) return;
 
     if (clusterRef.current) {
       clusterRef.current.remove();
@@ -107,7 +107,7 @@ export default function App() {
 
     if (mode === 'canvas') {
       const layer = new CanvasClusterLayer(
-        manifest.hitboxes,
+        hitboxes,
         defectsByPos,
         tileMeta.leaflet_bounds,
         layerCallbacks,
@@ -116,7 +116,7 @@ export default function App() {
       clusterRef.current = layer;
     } else {
       const handle = createDefectLayer(
-        manifest.hitboxes,
+        hitboxes,
         defectsByPos,
         map,
         layerCallbacks,
@@ -124,7 +124,7 @@ export default function App() {
       handle.addTo(map);
       clusterRef.current = handle;
     }
-  }, [mapReady, mode, manifest, defectsByPos, tileMeta, layerCallbacks]);
+  }, [mapReady, mode, hitboxes, defectsByPos, tileMeta, layerCallbacks]);
 
   if (loading) {
     return (
@@ -142,7 +142,7 @@ export default function App() {
     );
   }
 
-  if (error || !tileMeta || !manifest) {
+  if (error || !tileMeta || !hitboxes) {
     return (
       <Box display="flex" alignItems="center" justifyContent="center" height="100vh">
         <Typography color="error">

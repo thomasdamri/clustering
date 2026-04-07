@@ -31,7 +31,7 @@ function weightedDefectCount(): number {
 }
 
 export function generateDefects(hitboxes: Hitbox[]): Defect[] {
-  const found = hitboxes.filter((h) => h.found);
+  const found = hitboxes.filter((h) => h.found && h.leaflet !== null);
   const defects: Defect[] = [];
   let id = 1;
 

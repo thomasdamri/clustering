@@ -114,7 +114,7 @@ export class CanvasClusterLayer extends L.Layer implements ClusterLayerHandle {
     const points: Supercluster.PointFeature<PointProps>[] = [];
     for (const [pos, defects] of defectsByPos) {
       const hb = hitboxMap.get(pos);
-      if (!hb) continue;
+      if (!hb || !hb.leaflet) continue;
       const { lat, lng } = hb.leaflet;
       points.push({
         type: 'Feature',

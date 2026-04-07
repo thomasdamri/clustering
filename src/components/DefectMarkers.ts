@@ -182,7 +182,7 @@ export function createDefectLayer(
 
   for (const [pos, defects] of defectsByPos) {
     const hitbox = hitboxMap.get(pos);
-    if (!hitbox) continue;
+    if (!hitbox || !hitbox.leaflet) continue;
 
     const { lat, lng } = hitbox.leaflet;
     const count = defects.length;

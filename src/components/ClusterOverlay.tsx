@@ -1,14 +1,14 @@
-import { Fragment, useMemo } from 'react';
-import Popper from '@mui/material/Popper';
-import Paper from '@mui/material/Paper';
-import Popover from '@mui/material/Popover';
-import List from '@mui/material/List';
-import ListItemButton from '@mui/material/ListItemButton';
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
-import type { HoveredCluster, ActiveCluster, Severity } from '../types';
+import { Fragment, useMemo } from "react";
+import Popper from "@mui/material/Popper";
+import Paper from "@mui/material/Paper";
+import Popover from "@mui/material/Popover";
+import List from "@mui/material/List";
+import ListItemButton from "@mui/material/ListItemButton";
+import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
+import Divider from "@mui/material/Divider";
+import type { HoveredCluster, ActiveCluster, Severity } from "../types";
 
 interface ClusterOverlayProps {
   hoveredCluster: HoveredCluster | null;
@@ -19,7 +19,7 @@ interface ClusterOverlayProps {
 
 function makeVirtualAnchor(x: number, y: number) {
   return {
-    nodeType: 1 as Node['ELEMENT_NODE'],
+    nodeType: 1 as Node["ELEMENT_NODE"],
     getBoundingClientRect: () =>
       DOMRect.fromRect({ x, y, width: 0, height: 0 }),
   };
@@ -27,9 +27,12 @@ function makeVirtualAnchor(x: number, y: number) {
 
 function severitySx(severity: Severity): object {
   switch (severity) {
-    case 'High': return { bgcolor: '#FFDAD6', color: '#93000A' };
-    case 'Med':  return { bgcolor: '#FFE0B2', color: '#E65100' };
-    case 'Low':  return { bgcolor: '#E8F5E9', color: '#1B5E20' };
+    case "High":
+      return { bgcolor: "#FFDAD6", color: "#93000A" };
+    case "Med":
+      return { bgcolor: "#FFE0B2", color: "#E65100" };
+    case "Low":
+      return { bgcolor: "#E8F5E9", color: "#1B5E20" };
   }
 }
 
@@ -66,30 +69,30 @@ export default function ClusterOverlay({
         placement="right"
         modifiers={[
           {
-            name: 'flip',
+            name: "flip",
             enabled: true,
-            options: { fallbackPlacements: ['left', 'top', 'bottom'] },
+            options: { fallbackPlacements: ["left", "top", "bottom"] },
           },
           {
-            name: 'offset',
+            name: "offset",
             options: { offset: [0, 8] },
           },
         ]}
-        sx={{ zIndex: 1500, pointerEvents: 'none' }}
+        sx={{ zIndex: 1500, pointerEvents: "none" }}
       >
         <Paper
           elevation={0}
           sx={{
             px: 1,
             py: 0.5,
-            bgcolor: 'rgba(50,48,51,0.92)',
-            color: '#fff',
+            bgcolor: "rgba(50,48,51,0.92)",
+            color: "#fff",
             borderRadius: 1,
             fontSize: 12,
             lineHeight: 1.4,
           }}
         >
-          {hoveredCluster?.count} defect{hoveredCluster?.count !== 1 ? 's' : ''}
+          {hoveredCluster?.count} defect{hoveredCluster?.count !== 1 ? "s" : ""}
         </Paper>
       </Popper>
 
@@ -98,18 +101,18 @@ export default function ClusterOverlay({
         open={!!activeCluster}
         anchorEl={popoverAnchor}
         onClose={onDismiss}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        transformOrigin={{ vertical: "top", horizontal: "center" }}
         PaperProps={{
           sx: {
             width: 260,
             maxHeight: 500,
             borderRadius: 3,
-            border: '0.5px solid',
-            borderColor: 'divider',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
+            border: "0.5px solid",
+            borderColor: "divider",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
           },
         }}
       >
@@ -119,53 +122,54 @@ export default function ClusterOverlay({
             px: 1.5,
             py: 1,
             borderBottom: 1,
-            borderColor: 'divider',
+            borderColor: "divider",
             flexShrink: 0,
           }}
         >
           <Typography
             variant="caption"
             sx={{
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'text.secondary',
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: "text.secondary",
               fontWeight: 500,
             }}
           >
             {activeCluster?.defects.length} Defect
-            {(activeCluster?.defects.length ?? 0) > 1 ? 's' : ''}
+            {(activeCluster?.defects.length ?? 0) > 1 ? "s" : ""}
           </Typography>
         </Box>
 
         {/* Defect list */}
-        <List disablePadding sx={{ overflowY: 'auto', flex: 1 }}>
+        <List disablePadding sx={{ overflowY: "auto", flex: 1 }}>
           {activeCluster?.defects.map((defect, i) => (
             <Fragment key={defect.defectId}>
               <ListItemButton
                 onClick={() => onDefectSelect(defect.defectId)}
-                sx={{ px: 1.5, py: 0.75, gap: 1, alignItems: 'center' }}
+                sx={{ px: 1.5, py: 0.75, gap: 1, alignItems: "center" }}
               >
                 <Typography
                   component="span"
                   sx={{
-                    fontFamily: 'monospace',
+                    fontFamily: "monospace",
                     fontSize: 11,
-                    color: '#21005D',
+                    color: "#21005D",
                     minWidth: 76,
                     flexShrink: 0,
                   }}
                 >
-                  {defect.defectId}
+                  {defect.fittingPos}
+                  {/* {defect.rr} */}
                 </Typography>
                 <Typography
                   component="span"
                   sx={{
                     fontSize: 11,
-                    color: 'text.secondary',
+                    color: "text.secondary",
                     flex: 1,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {defect.description}

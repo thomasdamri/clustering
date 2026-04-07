@@ -7,15 +7,7 @@ export interface TileMeta {
 export interface Hitbox {
   label: string;
   found: boolean;
-  leaflet: {
-    lat: number;
-    lng: number;
-  };
-}
-
-export interface LabelManifest {
-  version: string;
-  hitboxes: Hitbox[];
+  leaflet: { lat: number; lng: number } | null;
 }
 
 export type Severity = 'High' | 'Med' | 'Low';

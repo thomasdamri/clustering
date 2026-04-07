@@ -1,8 +1,19 @@
 {
   "max_zoom": 5,
   "tile_size": 256,
+  "full_width_px": 8192,
+  "full_height_px": 1153,
+  "svg_viewbox_width": 1000000.0,
+  "svg_viewbox_height": 140722.0,
+  "px_per_svg_unit": 0.008192,
   "leaflet_bounds": [
-    [-256.0, 0],
-    [0, 1819.0431]
+    [
+      -256.0,
+      0
+    ],
+    [
+      0,
+      1818.8656
+    ]
   ]
 }

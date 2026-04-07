@@ -32,7 +32,7 @@ export default function MapViewer({ tileMeta, onMapReady }: MapViewerProps) {
 
     map.fitBounds(bounds);
 
-    L.tileLayer("/tilles/{z}/{x}/{y}.webp", {
+    L.tileLayer("/tiles/{z}/{x}/{y}.png", {
       tileSize: tileMeta.tile_size,
       noWrap: true,
       maxNativeZoom: tileMeta.max_zoom,
