@@ -33,6 +33,12 @@ export class InspectLayer implements ClusterLayerHandle {
   private _hovered: string | null = null;
   private _active: string | null = null;
 
+  // Zoom animation state — canvas sits outside Leaflet's CSS zoom transform,
+  // so we must recompute positions every frame during animation using the target zoom.
+  private _zoomAnimating = false;
+  private _animZoom = 0;
+  private _animCenter: L.LatLng | null = null;
+
   // Bound handlers (stored so we can remove them)
   private _boundMouseMove: (e: MouseEvent) => void;
   private _boundClick: (e: MouseEvent) => void;
@@ -40,6 +46,8 @@ export class InspectLayer implements ClusterLayerHandle {
   private _boundKeyDown: (e: KeyboardEvent) => void;
   private _boundRedraw: () => void;
   private _boundResize: () => void;
+  private _boundZoomAnim: (e: L.ZoomAnimEvent) => void;
+  private _boundZoomEnd: () => void;
 
   constructor(hitboxes: Hitbox[]) {
     this._hitboxes = hitboxes;
@@ -49,6 +57,8 @@ export class InspectLayer implements ClusterLayerHandle {
     this._boundKeyDown = (e) => this._onKeyDown(e);
     this._boundRedraw = () => this._scheduleRedraw();
     this._boundResize = () => { this._resizeCanvas(); this._scheduleRedraw(); };
+    this._boundZoomAnim = (e) => this._onZoomAnim(e);
+    this._boundZoomEnd = () => this._onZoomEnd();
   }
 
   addTo(map: L.Map): void {
@@ -71,7 +81,8 @@ export class InspectLayer implements ClusterLayerHandle {
     // Map events
     map.on('move', this._boundRedraw);
     map.on('moveend', this._boundRedraw);
-    map.on('zoomend', this._boundRedraw);
+    map.on('zoomanim', this._boundZoomAnim);
+    map.on('zoomend', this._boundZoomEnd);
     map.on('resize', this._boundResize);
 
     // Mouse events
@@ -89,7 +100,8 @@ export class InspectLayer implements ClusterLayerHandle {
 
     map.off('move', this._boundRedraw);
     map.off('moveend', this._boundRedraw);
-    map.off('zoomend', this._boundRedraw);
+    map.off('zoomanim', this._boundZoomAnim);
+    map.off('zoomend', this._boundZoomEnd);
     map.off('resize', this._boundResize);
 
     this._canvas.removeEventListener('mousemove', this._boundMouseMove);
@@ -137,7 +149,39 @@ export class InspectLayer implements ClusterLayerHandle {
     this._rafId = requestAnimationFrame(() => {
       this._rafId = null;
       this._redraw();
+      // Keep looping every frame while zoom animation is in progress
+      if (this._zoomAnimating) this._scheduleRedraw();
     });
+  }
+
+  /** Compute container-space point, accounting for in-progress zoom animation. */
+  private _toContainerPt(map: L.Map, lat: number, lng: number): { x: number; y: number } {
+    if (this._zoomAnimating && this._animCenter !== null) {
+      // During animation, map.latLngToContainerPoint() still uses the old zoom.
+      // Use map.project() at the target zoom instead, then offset from center.
+      const mapSize = map.getSize();
+      const centerPx = map.project(this._animCenter, this._animZoom);
+      const pt = map.project(L.latLng(lat, lng), this._animZoom);
+      return {
+        x: pt.x - centerPx.x + mapSize.x / 2,
+        y: pt.y - centerPx.y + mapSize.y / 2,
+      };
+    }
+    const p = map.latLngToContainerPoint(L.latLng(lat, lng));
+    return { x: p.x, y: p.y };
+  }
+
+  private _onZoomAnim(e: L.ZoomAnimEvent): void {
+    this._zoomAnimating = true;
+    this._animZoom = e.zoom;
+    this._animCenter = e.center;
+    this._scheduleRedraw();
+  }
+
+  private _onZoomEnd(): void {
+    this._zoomAnimating = false;
+    this._animCenter = null;
+    this._scheduleRedraw();
   }
 
   private _redraw(): void {
@@ -156,10 +200,7 @@ export class InspectLayer implements ClusterLayerHandle {
       const corners = hb.bbox.leaflet.corners;
       if (corners.length < 3) continue;
 
-      const pts = corners.map((c) => {
-        const p = map.latLngToContainerPoint(L.latLng(c.lat, c.lng));
-        return { x: p.x, y: p.y };
-      });
+      const pts = corners.map((c) => this._toContainerPt(map, c.lat, c.lng));
 
       quads.push({ label: hb.label, pts });
 
