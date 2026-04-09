@@ -4,10 +4,23 @@ export interface TileMeta {
   leaflet_bounds: [[number, number], [number, number]];
 }
 
+export interface HitboxLeafletCorner {
+  lat: number;
+  lng: number;
+}
+
+export interface HitboxBBoxLeaflet {
+  corners: HitboxLeafletCorner[];
+  center: { lat: number; lng: number };
+}
+
 export interface Hitbox {
   label: string;
   found: boolean;
   leaflet: { lat: number; lng: number } | null;
+  bbox: {
+    leaflet: HitboxBBoxLeaflet;
+  } | null;
 }
 
 export type Severity = 'High' | 'Med' | 'Low';
