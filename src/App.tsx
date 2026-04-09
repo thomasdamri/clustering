@@ -213,13 +213,15 @@ export default function App() {
           color="warning"
           variant="filled"
         />
-        <Chip
-          label={mode === 'canvas' ? 'Canvas' : 'Leaflet'}
-          color="secondary"
-          variant={mode === 'canvas' ? 'filled' : 'outlined'}
-          onClick={() => setMode((m) => (m === 'canvas' ? 'leaflet' : 'canvas'))}
-          sx={{ cursor: 'pointer' }}
-        />
+        {viewMode === 'cluster' && (
+          <Chip
+            label={mode === 'canvas' ? 'Canvas' : 'Leaflet'}
+            color="secondary"
+            variant={mode === 'canvas' ? 'filled' : 'outlined'}
+            onClick={() => setMode((m) => (m === 'canvas' ? 'leaflet' : 'canvas'))}
+            sx={{ cursor: 'pointer' }}
+          />
+        )}
       </Box>
     </Box>
   );
