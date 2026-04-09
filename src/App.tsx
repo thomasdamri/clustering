@@ -8,6 +8,7 @@ import MapViewer from './components/MapViewer';
 import ClusterOverlay from './components/ClusterOverlay';
 import { CanvasClusterLayer } from './components/CanvasClusterLayer';
 import { createDefectLayer } from './components/DefectMarkers';
+import { InspectLayer } from './components/InspectLayer';
 import { generateDefects, groupDefectsByPos } from './utils/generateDefects';
 import type {
   TileMeta,
@@ -19,6 +20,7 @@ import type {
 } from './types';
 
 type RendererMode = 'canvas' | 'leaflet';
+type ViewMode = 'cluster' | 'inspect';
 
 export default function App() {
   const [tileMeta, setTileMeta] = useState<TileMeta | null>(null);
@@ -26,6 +28,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<RendererMode>('canvas');
+  const [viewMode, setViewMode] = useState<ViewMode>('cluster');
   const [mapReady, setMapReady] = useState(false);
 
   // Overlay state
@@ -105,7 +108,11 @@ export default function App() {
       setActiveCluster(null);
     }
 
-    if (mode === 'canvas') {
+    if (viewMode === 'inspect') {
+      const layer = new InspectLayer(hitboxes);
+      layer.addTo(map);
+      clusterRef.current = layer;
+    } else if (mode === 'canvas') {
       const layer = new CanvasClusterLayer(
         hitboxes,
         defectsByPos,
@@ -124,7 +131,7 @@ export default function App() {
       handle.addTo(map);
       clusterRef.current = handle;
     }
-  }, [mapReady, mode, hitboxes, defectsByPos, tileMeta, layerCallbacks]);
+  }, [mapReady, viewMode, mode, hitboxes, defectsByPos, tileMeta, layerCallbacks]);
 
   if (loading) {
     return (
@@ -154,6 +161,33 @@ export default function App() {
 
   return (
     <Box sx={{ height: '100vh', width: '100vw', position: 'relative' }}>
+      {/* Cluster / Inspect toggle — top-left */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 12,
+          left: 12,
+          zIndex: 1000,
+          display: 'flex',
+          gap: 1,
+        }}
+      >
+        <Chip
+          label="Cluster"
+          color="primary"
+          variant={viewMode === 'cluster' ? 'filled' : 'outlined'}
+          onClick={() => setViewMode('cluster')}
+          sx={{ cursor: 'pointer' }}
+        />
+        <Chip
+          label="Inspect"
+          color="primary"
+          variant={viewMode === 'inspect' ? 'filled' : 'outlined'}
+          onClick={() => setViewMode('inspect')}
+          sx={{ cursor: 'pointer' }}
+        />
+      </Box>
+
       <MapViewer tileMeta={tileMeta} onMapReady={handleMapReady} />
 
       <ClusterOverlay
